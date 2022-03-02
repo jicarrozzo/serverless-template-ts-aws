@@ -1,0 +1,86 @@
+service: geo-cloud-api
+
+custom:
+  stages:
+    - dev
+    - test
+    - prod
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+  settings:
+    # opt:stage permite pasar un stage name por parametros al hacer el deploy
+    stage: ${opt:stage, self:provider.stage}
+    accountId: !Ref "AWS::AccountId"
+    region: ${self:provider.region} 
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+
+  cors:
+    origin: '*'
+    headers:
+      - Content-Type
+      - X-Amz-Date
+      - Authorization
+      - X-Api-Key
+      - X-Amz-Security-Token
+      - X-Amz-User-Agent
+      - Access-Control-Allow-Origin 
+      - Access-Control-Allow-Credentials
+      - Access-Control-Allow-Methods
+      - Access-Control-Allow-Headers
+    allowCredentials: true
+    cacheControl: 'max-age=600, s-maxage=600, proxy-revalidate' 
+
+# Add the serverless-webpack plugin
+plugins:
+  - serverless-webpack
+  - serverless-offline
+  - serverless-iam-roles-per-function
+  - serverless-prune-plugin
+  
+provider:
+  name: aws
+  stage: dev
+  region: us-east-1
+  runtime: nodejs12.x
+  apiGateway:
+    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
+  environment: ${self:custom.settings}    
+  iamRoleStatements:
+    - Effect: "Allow"
+      Resource: "*"
+      Action:
+        # - cognito-idp:*
+        # - dynamodb:Query
+        # - dynamodb:Scan
+        # - dynamodb:GetItem
+        # - dynamodb:PutItem
+        # - dynamodb:UpdateItem
+        # - dynamodb:DeleteItem
+
+functions:
+
+  handlerGet:
+    handler: src/handler.get
+    events:
+      - http:
+          method: get
+          path: handler/{id}
+          # authorizer:
+          #   name: authorizer
+          #   arn: ${self:provider.environment.cognitopoolARN}
+          cors: ${self:custom.cors}
+  
+resources:
+  Resources:
+    GatewayResponseDefault4XX: # Control de CORS para el rechazo por Authorizer
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+
+
